@@ -12,7 +12,7 @@ const fs = require('fs');
 const args = require('yargs').argv;
 
 const options = {
-  headless: false,
+  headless: args['nonheadless'] ? false : 'new',
   ignoreHTTPSErrors: true,
   args: [
     "--no-sandbox",
@@ -39,7 +39,7 @@ if (!checkDateFormat(args.date)) {
   process.exit(1);
 }
 
-// puppeteer usage as normal
+process.stderr.write('Launching puppeteer\n')
 puppeteer.launch(options).then(async browser => {
   await launch(browser, args.origin, args.dest, args.date);
 })
@@ -49,13 +49,11 @@ function rand(x, y) {
 }
 
 async function launch(browser, origin, dest, date) {
-  console.log('launch('+origin+', '+dest+', '+date+')');
   const page = await browser.newPage()
   await page.setDefaultNavigationTimeout(0);
 
   await page.setRequestInterception(true);
 
-  let journeyRequest = null;
   let allRequests = [];
   page.on('request', request => {
     request_client({
@@ -71,12 +69,6 @@ async function launch(browser, origin, dest, date) {
         'response_size': response.headers['content-length'],
         'response_body': response.body,
       };
-
-      if (req['request_url'].endsWith('/dotcom/journey-solution-option')) {
-        journeyRequest = req;
-      }
-
-      console.log('REQ:', req['request_url']);
       allRequests.push(req);
 
       request.continue();
@@ -90,17 +82,14 @@ async function launch(browser, origin, dest, date) {
         'status_code': error.statusCode,
       };
 
-      if (req['request_url'].endsWith('/dotcom/journey-solution-option')) {
-        journeyRequest = req;
-      }
       allRequests.push(req);
 
       request.continue();
-      //request.abort();
     });
   });
-
+  process.stderr.write('Opening Amtrak\n')
   await page.goto('https://www.amtrak.com/home.html', { waitUntil: 'networkidle2' });
+  process.stderr.write('Filling form\n')
   
   await page.focus("[data-julie='departdisplay_booking_oneway']")
   await page.keyboard.type(date, {delay: 100});
@@ -118,9 +107,8 @@ async function launch(browser, origin, dest, date) {
   await page.waitForSelector('.to-station [amt-auto-test-id="refine-search-from&to"]', {visible: true})
   await page.waitForTimeout(rand(150, 750));
 
-
+  process.stderr.write('Submitting form\n')
   await page.click("[amt-auto-test-id='fare-finder-findtrains-button']")
-  console.log('Submitting form')
 
   await Promise.any([
     page.waitForSelector('#amtrak_error_id'),
@@ -129,14 +117,16 @@ async function launch(browser, origin, dest, date) {
 
   let error = await page.$eval('#amtrak_error_id', (el) => el.innerText).catch(() => null);
   if (error) {
-    console.warn("AMTRAK ERROR:", error);
+    process.stderr.write('Amtrak error:\n'+error+'\n')
+    process.stdout.write(JSON.stringify({"error": error}));
 
-    console.log(journeyRequest);
     await browser.close();
     fs.writeFileSync('requests.json', JSON.stringify(allRequests));
 
     return;
   }
+
+  process.stderr.write('Waiting for output\n')
 
   await page.waitForFunction("!!sessionStorage && !!sessionStorage['searchresults']")
 
@@ -144,10 +134,9 @@ async function launch(browser, origin, dest, date) {
     return sessionStorage['searchresults'];
   });
 
-  console.log('RES:', res);
+  process.stdout.write(res);
   fs.writeFileSync('output.json', res);
 
   await browser.close()
   fs.writeFileSync('requests.json', JSON.stringify(allRequests));
-  console.log(`All done`)
 }
