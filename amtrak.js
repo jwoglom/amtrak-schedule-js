@@ -20,6 +20,7 @@ const options = {
     "--disable-sync",
     "--ignore-certificate-errors",
     "--lang=en-US,en;q=0.9",
+    "--disable-gpu",
   ],
   defaultViewport: { width: 1366, height: 768 },
 }
