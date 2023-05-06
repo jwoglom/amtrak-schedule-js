@@ -7,13 +7,41 @@ const StealthPlugin = require('puppeteer-extra-plugin-stealth')
 puppeteer.use(StealthPlugin())
 
 const request_client = require('request-promise-native');
-
 const fs = require('fs');
 
+const args = require('yargs').argv;
+
+const options = {
+  headless: false,
+  ignoreHTTPSErrors: true,
+  args: [
+    "--no-sandbox",
+    "--disable-setuid-sandbox",
+    "--disable-sync",
+    "--ignore-certificate-errors",
+    "--lang=en-US,en;q=0.9",
+  ],
+  defaultViewport: { width: 1366, height: 768 },
+}
+
+if (!args.origin || !args.dest || !args.date) {
+  console.error('Required --origin CODE, --dest CODE, and --date MM/DD/YYYY');
+  process.exit(1);
+}
+
+function checkDateFormat(dateString) {
+  const pattern = /^([1-9]|0[1-9]|1[0-2])\/([1-9]|[12][0-9]|3[01])\/\d{4}$/;
+  return pattern.test(dateString);
+}
+
+if (!checkDateFormat(args.date)) {
+  console.error('Invalid date format: expected MM/DD/YYYY or M/D/YYYY');
+  process.exit(1);
+}
 
 // puppeteer usage as normal
-puppeteer.launch({ headless: false }).then(async browser => {
-  await launch(browser, 'NYP', 'BOS', '5/24/2023')
+puppeteer.launch(options).then(async browser => {
+  await launch(browser, args.origin, args.dest, args.date);
 })
 
 function rand(x, y) {
@@ -72,24 +100,23 @@ async function launch(browser, origin, dest, date) {
     });
   });
 
-  await page.goto('https://www.amtrak.com/home.html')
-  await page.waitForNetworkIdle(500);
+  await page.goto('https://www.amtrak.com/home.html', { waitUntil: 'networkidle2' });
   
   await page.focus("[data-julie='departdisplay_booking_oneway']")
   await page.keyboard.type(date, {delay: 100});
-  await page.waitForTimeout(rand(250, 750));
+  await page.waitForTimeout(rand(150, 750));
 
   await page.focus("[data-julie='fromfield_booking']")
   await page.keyboard.type(origin, {delay: 100});
   await page.focus("[data-julie='departdisplay_booking_oneway']")
   await page.waitForSelector('.from-station [amt-auto-test-id="refine-search-from&to"]', {visible: true})
-  await page.waitForTimeout(rand(250, 750));
+  await page.waitForTimeout(rand(150, 750));
   
   await page.focus("[data-julie='tofield_booking']")
   await page.keyboard.type(dest, {delay: 100});
   await page.focus("[data-julie='departdisplay_booking_oneway']")
   await page.waitForSelector('.to-station [amt-auto-test-id="refine-search-from&to"]', {visible: true})
-  await page.waitForTimeout(rand(750, 1250));
+  await page.waitForTimeout(rand(150, 750));
 
 
   await page.click("[amt-auto-test-id='fare-finder-findtrains-button']")
@@ -111,9 +138,14 @@ async function launch(browser, origin, dest, date) {
     return;
   }
 
-  await page.waitForNetworkIdle(500);
+  await page.waitForFunction("!!sessionStorage && !!sessionStorage['searchresults']")
 
-  console.log(journeyRequest);
+  let res = await page.evaluate(_ => {
+    return sessionStorage['searchresults'];
+  });
+
+  console.log('RES:', res);
+  fs.writeFileSync('output.json', res);
 
   await browser.close()
   fs.writeFileSync('requests.json', JSON.stringify(allRequests));
