@@ -25,10 +25,6 @@ const options = {
   defaultViewport: { width: 1366, height: 768 },
 }
 
-function checkDateFormat(dateString) {
-  const pattern = /^([1-9]|0[1-9]|1[0-2])\/([1-9]|[12][0-9]|3[01])\/\d{4}$/;
-  return pattern.test(dateString);
-}
 
 if (!!args['webui']) {
   var express = require("express");
@@ -47,11 +43,6 @@ if (!!args['webui']) {
       }
 
 
-      if (!checkDateFormat(date)) {
-        res.json({'error': 'Invalid date format: expected MM/DD/YYYY or M/D/YYYY'});
-        return;
-      }
-
       res.json(await launch(browser, origin, dest, date, false));
     });
   });
@@ -64,12 +55,6 @@ if (!!args['webui']) {
 
   if (!args.origin || !args.dest || !args.date) {
     console.error('Required --origin CODE, --dest CODE, and --date MM/DD/YYYY');
-    process.exit(1);
-  }
-
-
-  if (!checkDateFormat(args.date)) {
-    console.error('Invalid date format: expected MM/DD/YYYY or M/D/YYYY');
     process.exit(1);
   }
 
