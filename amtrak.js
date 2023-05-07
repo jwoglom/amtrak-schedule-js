@@ -25,31 +25,67 @@ const options = {
   defaultViewport: { width: 1366, height: 768 },
 }
 
-if (!args.origin || !args.dest || !args.date) {
-  console.error('Required --origin CODE, --dest CODE, and --date MM/DD/YYYY');
-  process.exit(1);
-}
-
 function checkDateFormat(dateString) {
   const pattern = /^([1-9]|0[1-9]|1[0-2])\/([1-9]|[12][0-9]|3[01])\/\d{4}$/;
   return pattern.test(dateString);
 }
 
-if (!checkDateFormat(args.date)) {
-  console.error('Invalid date format: expected MM/DD/YYYY or M/D/YYYY');
-  process.exit(1);
-}
+if (!!args['webui']) {
+  var express = require("express");
+  var app = express();
 
-process.stderr.write('Launching puppeteer\n')
-puppeteer.launch(options).then(async browser => {
-  await launch(browser, args.origin, args.dest, args.date);
-})
+  puppeteer.launch(options).then(async browser => {
+    console.log("Launched puppeteer")
+    app.get("/request", async (req, res, next) => {
+      let origin = req.query.origin;
+      let dest = req.query.dest;
+      let date = req.query.date;
+
+      if (!origin || !dest || !date) {
+        res.json({'error': 'Required --origin CODE, --dest CODE, and --date MM/DD/YYYY'});
+        return;
+      }
+
+
+      if (!checkDateFormat(date)) {
+        res.json({'error': 'Invalid date format: expected MM/DD/YYYY or M/D/YYYY'});
+        return;
+      }
+
+      res.json(await launch(browser, origin, dest, date, false));
+    });
+  });
+
+  app.listen(3000, () => {
+    console.log("Server running on port 3000");
+  });
+  
+} else {
+
+  if (!args.origin || !args.dest || !args.date) {
+    console.error('Required --origin CODE, --dest CODE, and --date MM/DD/YYYY');
+    process.exit(1);
+  }
+
+
+  if (!checkDateFormat(args.date)) {
+    console.error('Invalid date format: expected MM/DD/YYYY or M/D/YYYY');
+    process.exit(1);
+  }
+
+  process.stderr.write('Launching puppeteer\n')
+  puppeteer.launch(options).then(async browser => {
+    await launch(browser, args.origin, args.dest, args.date, true);
+    await browser.close()
+  })
+}
 
 function rand(x, y) {
   return x + Math.random() * (y-x);
 }
 
-async function launch(browser, origin, dest, date) {
+async function launch(browser, origin, dest, date, toStdout) {
+  process.stderr.write('launch(origin='+origin+', dest='+dest+', date='+date+')\n');
   const page = await browser.newPage()
   await page.setDefaultNavigationTimeout(0);
 
@@ -119,10 +155,12 @@ async function launch(browser, origin, dest, date) {
   let error = await page.$eval('#amtrak_error_id', (el) => el.innerText).catch(() => null);
   if (error) {
     process.stderr.write('Amtrak error:\n'+error+'\n')
-    process.stdout.write(JSON.stringify({"error": error}));
-
-    await browser.close();
-    fs.writeFileSync('requests.json', JSON.stringify(allRequests));
+    if (toStdout) {
+      process.stdout.write(JSON.stringify({"error": error}));
+      fs.writeFileSync('requests.json', JSON.stringify(allRequests));
+    } else {
+      return {"error": error};
+    }
 
     return;
   }
@@ -135,9 +173,13 @@ async function launch(browser, origin, dest, date) {
     return sessionStorage['searchresults'];
   });
 
-  process.stdout.write(res);
-  fs.writeFileSync('output.json', res);
+  if (toStdout) {
+    process.stdout.write(res);
+    fs.writeFileSync('output.json', res);
 
-  await browser.close()
-  fs.writeFileSync('requests.json', JSON.stringify(allRequests));
+    fs.writeFileSync('requests.json', JSON.stringify(allRequests));
+  } else {
+    process.stderr.write('Done\n');
+    return JSON.parse(res);
+  }
 }
