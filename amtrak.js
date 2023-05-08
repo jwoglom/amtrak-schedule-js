@@ -140,6 +140,8 @@ async function launch(browser, origin, dest, date, toStdout) {
   let error = await page.$eval('#amtrak_error_id', (el) => el.innerText).catch(() => null);
   if (error) {
     process.stderr.write('Amtrak error:\n'+error+'\n')
+    await page.close();
+
     if (toStdout) {
       process.stdout.write(JSON.stringify({"error": error}));
       fs.writeFileSync('requests.json', JSON.stringify(allRequests));
@@ -157,6 +159,8 @@ async function launch(browser, origin, dest, date, toStdout) {
   let res = await page.evaluate(_ => {
     return sessionStorage['searchresults'];
   });
+
+  await page.close();
 
   if (toStdout) {
     process.stdout.write(res);
