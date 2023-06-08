@@ -111,6 +111,16 @@ async function launch(browser, origin, dest, date, toStdout) {
   });
   process.stderr.write('Opening Amtrak\n')
   await page.goto('https://www.amtrak.com/home.html', { waitUntil: 'networkidle2' });
+  process.stderr.write('Page loaded\n')
+  
+  let btn = await page.evaluate(_ => {
+    var btn = document.querySelector('#onetrust-accept-btn-handler');
+    if (btn) btn.click()
+    return !!btn;
+  });
+  process.stderr.write('Cookie prompt:'+btn+'\n');
+
+
   process.stderr.write('Filling form\n')
   
   await page.focus("[data-julie='departdisplay_booking_oneway']")
