@@ -119,12 +119,30 @@ async function launch(browser, origin, dest, date, toStdout) {
     return !!btn;
   });
   process.stderr.write('Cookie prompt:'+btn+'\n');
+  if (btn) {
+    await page.waitForTimeout(150)
+  }
 
 
   process.stderr.write('Filling form\n')
   
   await page.focus("[data-julie='departdisplay_booking_oneway']")
-  await page.keyboard.type(date, {delay: 100});
+  await page.keyboard.type(date, {delay: 250});
+
+  let dateOk = await page.evaluate((date) => {
+    var btn = document.querySelector("[data-julie='departdisplay_booking_oneway']");
+    if (btn && btn.value == date) return true;
+    return false;
+  }, date);
+
+  if (!dateOk) {
+    for (let i=0; i<date.length; i++) {
+      await page.keyboard.press('Backspace', {delay: 50});
+    }
+
+    await page.keyboard.type(date, {delay: 250});
+  }
+
   await page.waitForTimeout(rand(150, 750));
 
   await page.focus("[data-julie='fromfield_booking']")
